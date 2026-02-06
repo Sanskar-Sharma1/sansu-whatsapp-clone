@@ -2,7 +2,7 @@ import React from 'react'
 
 const ChatsList = () => {
   return (
-    <div>ChatsList sanskarrr</div>
+    <div>ChatsList sansu</div>
   )
 }
 
