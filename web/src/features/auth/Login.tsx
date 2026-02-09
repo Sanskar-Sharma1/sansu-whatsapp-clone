@@ -5,6 +5,8 @@ import { GoogleLogin } from "@react-oauth/google";
 import { useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "./AuthContext";
+// import { saveLoggedInData } from "../../utils";
+import { loginWithGoogle } from "./auth.api";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -13,6 +15,8 @@ const Login = () => {
   const handleNext = async (response: any) => {
     if (response.credential) {
       setUserId(response.credential);
+      const data = await loginWithGoogle(response.credential);
+      setUserId(data.user._id);
       navigate("/");
     }
   };
