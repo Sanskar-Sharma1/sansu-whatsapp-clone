@@ -11,13 +11,3 @@ createRoot(document.getElementById("root")!).render(
     </AppProviders>
   </StrictMode>
 );
-
-// createRoot(document.getElementById('root')!).render(
-//   <StrictMode>
-//     <AuthProvider>
-//       <GoogleOAuthProvider clientId="360050562859-gm0ath3gsero6a9cn4jdvs09hrfv7tiu.apps.googleusercontent.com">
-//       <App />
-//       </GoogleOAuthProvider>
-//     </AuthProvider>
-//   </StrictMode>,
-// )
