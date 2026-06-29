@@ -1,34 +1,38 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { verifyToken } from "../services/auth.service";
+import { User, PUBLIC_USER_FIELDS, toPublicUser } from "../models/User.model";
 
-const JWT_SECRET = "supersecret";
-
-/** Extend Express Request type */
-declare global {
-  namespace Express {
-    interface Request {
-      userId?: string;
-    }
-  }
-}
-
-export function authMiddleware(
+export async function requireAuth(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
   try {
+    let token: string | undefined;
+
     const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Unauthorized" });
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.slice(7);
+    } else if (req.cookies?.authToken) {
+      token = req.cookies.authToken;
     }
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    req.userId = decoded.userId;
 
+    if (!token) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
+
+    const { userId } = verifyToken(token);
+    const user = await User.findById(userId).select(PUBLIC_USER_FIELDS).lean();
+
+    if (!user) {
+      res.status(401).json({ error: "User not found" });
+      return;
+    }
+
+    req.user = toPublicUser(user);
     next();
-  } catch (err) {
-    return res.status(401).json({ message: "Invalid token" });
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
   }
 }

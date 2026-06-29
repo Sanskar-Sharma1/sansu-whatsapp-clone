@@ -1,13 +1,20 @@
-import { useContext } from "react";
+import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { AuthContext } from "./AuthContext";
+import { useAuth } from "../../hooks/useAuth";
+import { Spinner } from "../../components/shared/Spinner";
 
-export default function ProtectedRoute({ children }: any) {
-  const { userId } = useContext(AuthContext);
+export default function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { user, isAuthLoading } = useAuth();
 
-  if (!userId) {
-    return <Navigate to="/login" replace />;
+  if (isAuthLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-canvas text-brand">
+        <Spinner size={44} />
+      </div>
+    );
   }
 
-  return children;
+  if (!user) return <Navigate to="/login" replace />;
+
+  return <>{children}</>;
 }

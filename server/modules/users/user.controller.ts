@@ -1,19 +1,16 @@
 import { Request, Response } from "express";
-import { getUserById } from "./user.service";
+import { getAllUsersExcept, getUserById } from "./user.service";
+import { ApiError } from "../../utils/ApiError";
+import { assertObjectId } from "../../utils/objectId";
 
-export async function getMeController(req: Request, res: Response) {
-  try {
-    const userId = req.userId!;
+export async function getAllUsersController(req: Request, res: Response) {
+  const users = await getAllUsersExcept(req.user!._id);
+  res.json({ users });
+}
 
-    const user = await getUserById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.json(user);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch user" });
-  }
+export async function getUserByIdController(req: Request, res: Response) {
+  const id = assertObjectId(req.query["id"], "user id");
+  const user = await getUserById(id);
+  if (!user) throw new ApiError(404, "User not found");
+  res.json({ user });
 }
