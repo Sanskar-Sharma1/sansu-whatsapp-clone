@@ -1,25 +1,26 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import ChatsList from "../features/chats/index";
+import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "../features/auth/ProtectedRoute";
-import Login from "../features/auth/Login";
+import LoginPage from "../pages/LoginPage";
+import SignupPage from "../pages/SignupPage";
+import ChatPage from "../pages/ChatPage";
 
 export default function AppRouter() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
 
-        <Route
-          path=""
-          element={
-            <ProtectedRoute>
-              <ChatsList />
-            </ProtectedRoute>
-          }
-        />
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <ChatPage />
+          </ProtectedRoute>
+        }
+      />
 
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </BrowserRouter>
+      <Route path="/" element={<Navigate to="/chat" replace />} />
+      <Route path="*" element={<Navigate to="/chat" replace />} />
+    </Routes>
   );
 }

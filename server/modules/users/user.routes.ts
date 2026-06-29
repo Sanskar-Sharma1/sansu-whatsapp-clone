@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { getMeController } from "./user.controller";
-import { authMiddleware } from "../../middleware/auth.middleware";
+import { getAllUsersController, getUserByIdController } from "./user.controller";
+import { requireAuth } from "../../middleware/auth.middleware";
+import { asyncHandler } from "../../utils/asyncHandler";
 
 const router = Router();
 
-/** Protected route */
-router.get("/me", authMiddleware, getMeController);
+router.get("/getUsers", requireAuth, asyncHandler(getAllUsersController));
+router.get("/getUser", requireAuth, asyncHandler(getUserByIdController));
 
 export default router;

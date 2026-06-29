@@ -1,13 +1,18 @@
-import { MongoClient } from "mongodb";
-
-const MONGO_URI = "mongodb://127.0.0.1:27017";
-const DB_NAME = "whatsapp_clone";
-
-export const client = new MongoClient(MONGO_URI);
+import mongoose from "mongoose";
+import { env } from "./env";
 
 export async function connectDB() {
-  await client.connect();
-  console.log("✅ MongoDB connected");
+  let retries = 5;
+  while (retries > 0) {
+    try {
+      await mongoose.connect(env.MONGO_URI);
+      console.log("✅ MongoDB connected via Mongoose");
+      return;
+    } catch (err) {
+      retries--;
+      if (retries === 0) throw err;
+      console.warn(`MongoDB connection failed, retrying... (${retries} left)`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
 }
-
-export const db = client.db(DB_NAME);

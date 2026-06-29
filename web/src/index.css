@@ -1,5 +1,124 @@
 @import "tailwindcss";
 
-body {
-    background-color: #FCF5EB;
+/* ──────────────────────────────────────────────────────────────
+   Design tokens — the single source of truth for the palette.
+   Tailwind v4 turns each --color-* into utilities (bg-canvas,
+   text-muted, border-line, …). Change a value here, not in 15 files.
+   ────────────────────────────────────────────────────────────── */
+@theme {
+  /* Surfaces — dark, WhatsApp-inspired, deepest → raised */
+  --color-canvas: #0b141a; /* app background */
+  --color-panel: #111b21; /* sidebars, form panels */
+  --color-surface: #202c33; /* cards, received bubbles, hover targets */
+  --color-input: #2a3942; /* inputs and raised controls */
+  --color-line: #2a3942; /* borders / dividers */
+  --color-line-subtle: #1f2c34;
+
+  /* Brand — each green has one role */
+  --color-brand: #25d366; /* primary CTAs, links, active state */
+  --color-brand-hover: #1fbc58;
+  --color-brand-strong: #00a884; /* in-conversation actions (send) */
+  --color-brand-strong-hover: #008f72;
+  --color-bubble-out: #005c4b; /* own message bubble */
+
+  /* Text */
+  --color-fg: #e9edef;
+  --color-muted: #8696a0;
+  --color-faint: #667781;
+
+  /* Feedback */
+  --color-danger: #f15c6d;
+  --color-danger-surface: rgba(241, 92, 109, 0.1);
+
+  /* Radius */
+  --radius-bubble: 0.875rem;
+
+  /* Type */
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Sora", "DM Sans", sans-serif;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* One global keyboard focus ring (WCAG 2.4.7) for every interactive element. */
+  :where(a, button, [role="button"], [role="tab"], [role="checkbox"], input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* ── Animations (login + typing indicator) ───────────────────── */
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+@keyframes dot-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

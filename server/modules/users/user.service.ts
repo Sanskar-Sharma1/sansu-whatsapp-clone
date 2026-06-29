@@ -1,8 +1,13 @@
-import { ObjectId } from "mongodb";
-import { db } from "../../config/db";
+import { User, IUserPublic, PUBLIC_USER_FIELDS, toPublicUser } from "../../models/User.model";
 
-export async function getUserById(userId: string) {
-  const users = db.collection("users");
+export async function getAllUsersExcept(userId: string): Promise<IUserPublic[]> {
+  const users = await User.find({ _id: { $ne: userId } })
+    .select(PUBLIC_USER_FIELDS)
+    .lean();
+  return users.map(toPublicUser);
+}
 
-  return users.findOne({ _id: new ObjectId(userId) });
+export async function getUserById(userId: string): Promise<IUserPublic | null> {
+  const user = await User.findById(userId).select(PUBLIC_USER_FIELDS).lean();
+  return user ? toPublicUser(user) : null;
 }
