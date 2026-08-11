@@ -1,10 +1,12 @@
-import { MessageType } from "../models/Message.model";
+import { AttachmentType } from "../models/Message.model";
 
 export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
+export type ResourceType = "image" | "video" | "raw";
+
 interface UploadKind {
-  messageType: MessageType;
-  resourceType: "image" | "video" | "raw";
+  messageType: AttachmentType;
+  resourceType: ResourceType;
 }
 
 /**

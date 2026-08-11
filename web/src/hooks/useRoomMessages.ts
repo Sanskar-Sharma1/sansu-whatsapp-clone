@@ -133,7 +133,7 @@ export function useRoomMessages(room: IRoom | null) {
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, optimistic]);
-      socket.emit("send-message", { roomId, content: trimmed, type: "text", clientId });
+      socket.emit("send-message", { roomId, content: trimmed, clientId });
     },
     [socket, roomId, user]
   );
@@ -144,15 +144,12 @@ export function useRoomMessages(room: IRoom | null) {
       setIsUploading(true);
       setSendError(null);
       try {
-        const uploaded = await uploadFileRequest(file);
+        // Only the handle travels back — the server owns the file's metadata.
+        const { uploadId } = await uploadFileRequest(file);
         socket.emit("send-message", {
           roomId,
           content: content.trim(),
-          type: uploaded.messageType,
-          fileUrl: uploaded.fileUrl,
-          fileName: uploaded.fileName,
-          fileSize: uploaded.fileSize,
-          mimeType: uploaded.mimeType,
+          uploadId,
           clientId: crypto.randomUUID(),
         });
       } catch (err) {

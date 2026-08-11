@@ -39,23 +39,19 @@ export interface IMessage {
   pending?: boolean;
 }
 
-export interface IUploadedFile {
-  fileUrl: string;
-  fileName: string;
-  fileSize: number;
-  mimeType: string;
-  messageType: MessageType;
+/**
+ * The upload endpoint hands back a handle, nothing else. File metadata lives
+ * server-side so it can't be tampered with on the way to `send-message`.
+ */
+export interface IUploadResponse {
+  uploadId: string;
 }
 
 // Socket event payloads
 export interface SendMessagePayload {
   roomId: string;
-  content: string;
-  type: MessageType;
-  fileUrl?: string;
-  fileName?: string;
-  fileSize?: number;
-  mimeType?: string;
+  content?: string;
+  uploadId?: string;
   clientId?: string;
 }
 
