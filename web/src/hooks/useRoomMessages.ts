@@ -4,7 +4,7 @@ import { useAuth } from "./useAuth";
 import { getRoomMessagesRequest } from "../api/rooms.api";
 import { uploadFileRequest } from "../api/files.api";
 import { getApiErrorMessage } from "../utils/apiError";
-import type { IMessage, IRoom, MessageReadPayload } from "../types";
+import type { IMessage, IRoom, MessageReceiptPayload } from "../types";
 
 interface IncomingMessage extends IMessage {
   clientId?: string;
@@ -39,7 +39,12 @@ export function useRoomMessages(room: IRoom | null) {
     socket.emit("join-room", { roomId });
 
     getRoomMessagesRequest({ roomId })
-      .then((res) => !cancelled && setMessages(res.messages))
+      .then((res) => {
+        if (cancelled) return;
+        setMessages(res.messages);
+        // Opening the room reads its backlog, not just what arrives from here on.
+        socket.emit("mark-room-read", { roomId });
+      })
       .catch((err) => !cancelled && setError(getApiErrorMessage(err, "Couldn't load messages")))
       .finally(() => !cancelled && setIsLoading(false));
 
@@ -71,30 +76,40 @@ export function useRoomMessages(room: IRoom | null) {
         return [...prev, msg];
       });
 
-      // Acknowledge messages from others as read.
+      // The room is open, so a message from someone else is read on arrival.
       if (msg.senderId._id !== user?._id) {
-        socket.emit("mark-read", { roomId, messageId: msg._id });
+        socket.emit("mark-room-read", { roomId });
       }
     };
 
-    const onRead = ({ messageId, userId }: MessageReadPayload) => {
+    /** Adds `userId` to one receipt list across every message in `messageIds`. */
+    const applyReceipt = (
+      field: "deliveredTo" | "readBy",
+      { roomId: eventRoomId, messageIds, userId }: MessageReceiptPayload
+    ) => {
+      if (eventRoomId !== roomId) return;
+      const ids = new Set(messageIds);
       setMessages((prev) =>
         prev.map((m) =>
-          m._id === messageId && !m.readBy.includes(userId)
-            ? { ...m, readBy: [...m.readBy, userId] }
+          ids.has(m._id) && !m[field].includes(userId)
+            ? { ...m, [field]: [...m[field], userId] }
             : m
         )
       );
     };
 
+    const onDelivered = (payload: MessageReceiptPayload) => applyReceipt("deliveredTo", payload);
+    const onRead = (payload: MessageReceiptPayload) => applyReceipt("readBy", payload);
     const onError = ({ message }: { message: string }) => setSendError(message);
 
     socket.on("receive-message", onReceive);
-    socket.on("message-read", onRead);
+    socket.on("messages-delivered", onDelivered);
+    socket.on("messages-read", onRead);
     socket.on("error", onError);
     return () => {
       socket.off("receive-message", onReceive);
-      socket.off("message-read", onRead);
+      socket.off("messages-delivered", onDelivered);
+      socket.off("messages-read", onRead);
       socket.off("error", onError);
     };
   }, [socket, roomId, user?._id]);
@@ -113,6 +128,7 @@ export function useRoomMessages(room: IRoom | null) {
         senderId: user,
         content: trimmed,
         type: "text",
+        deliveredTo: [],
         readBy: [user._id],
         createdAt: new Date().toISOString(),
       };

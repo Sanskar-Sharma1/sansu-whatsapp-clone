@@ -28,9 +28,7 @@ app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 app.use(morgan(env.isProduction ? "combined" : "dev"));
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", uptime: process.uptime() });
-});
+app.get("/health", (_req, res) => { res.json({ status: "ok", uptime: process.uptime() }) });
 
 app.use("/auth", authRoutes);
 app.use("/users", userRoutes);

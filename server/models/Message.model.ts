@@ -11,6 +11,8 @@ export interface IMessage extends Document {
   fileName?: string;
   fileSize?: number;
   mimeType?: string;
+  /** Members whose client has received the message (persisted → survives refresh). */
+  deliveredTo: Types.ObjectId[];
   readBy: Types.ObjectId[];
   createdAt: Date;
 }
@@ -25,6 +27,7 @@ const MessageSchema = new Schema<IMessage>(
     fileName: { type: String },
     fileSize: { type: Number },
     mimeType: { type: String },
+    deliveredTo: [{ type: Schema.Types.ObjectId, ref: "User" }],
     readBy: [{ type: Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }

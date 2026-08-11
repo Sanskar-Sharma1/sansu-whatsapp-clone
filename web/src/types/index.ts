@@ -30,6 +30,7 @@ export interface IMessage {
   fileName?: string;
   fileSize?: number;
   mimeType?: string;
+  deliveredTo: string[];
   readBy: string[];
   createdAt: string;
   /** Client-only: correlates an optimistic message with its server echo. */
@@ -64,8 +65,10 @@ export interface TypingPayload {
   roomId: string;
 }
 
-export interface MessageReadPayload {
-  messageId: string;
+/** Batched receipt broadcast — used by both `messages-delivered` and `messages-read`. */
+export interface MessageReceiptPayload {
+  roomId: string;
+  messageIds: string[];
   userId: string;
 }
 

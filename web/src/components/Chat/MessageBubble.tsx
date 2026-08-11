@@ -67,14 +67,22 @@ function MessageMedia({ message }: { message: IMessage }) {
   }
 }
 
+/**
+ * Three states, WhatsApp-style: one tick once the server stored it, two ticks
+ * once another member's client has it, two blue ticks once they've read it.
+ */
 function ReadReceipt({ message }: { message: IMessage }) {
   if (message.pending) return <Clock size={13} aria-label="Sending" />;
-  const readByOthers = message.readBy.some((id) => id !== message.senderId._id);
-  return readByOthers ? (
-    <CheckCheck size={14} className="text-sky-300" aria-label="Read" />
-  ) : (
-    <Check size={14} aria-label="Sent" />
-  );
+
+  const byOthers = (ids: string[]) => ids.some((id) => id !== message.senderId._id);
+
+  if (byOthers(message.readBy)) {
+    return <CheckCheck size={14} className="text-receipt-read" aria-label="Read" />;
+  }
+  if (byOthers(message.deliveredTo)) {
+    return <CheckCheck size={14} aria-label="Delivered" />;
+  }
+  return <Check size={14} aria-label="Sent" />;
 }
 
 function MessageBubbleBase({ message, isOwn }: MessageBubbleProps) {
