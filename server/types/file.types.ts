@@ -1,9 +1,16 @@
-import { MessageType } from "../models/Message.model";
+import { ResourceType } from "../config/uploads";
 
-export interface IUploadedFile {
+/** What Cloudinary gives back once the bytes are stored. */
+export interface CloudinaryAsset {
+  publicId: string;
   fileUrl: string;
-  fileName: string;
-  fileSize: number;
-  mimeType: string;
-  messageType: MessageType;
+  resourceType: ResourceType;
+}
+
+/**
+ * The upload endpoint's entire response. Deliberately opaque — the client gets
+ * a handle, not the metadata, so it has nothing to tamper with.
+ */
+export interface IUploadResponse {
+  uploadId: string;
 }

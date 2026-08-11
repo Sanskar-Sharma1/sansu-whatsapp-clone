@@ -4,6 +4,8 @@ import { Message } from "../models/Message.model";
 import { Room } from "../models/Room.model";
 import { User } from "../models/User.model";
 import { isRoomMember } from "../modules/rooms/room.service";
+import { createRoomMessage } from "../services/message.service";
+import { ApiError } from "../utils/ApiError";
 import {
   SendMessagePayload,
   TypingPayload,
@@ -11,8 +13,6 @@ import {
   JoinRoomPayload,
 } from "../types/socket.types";
 
-const MESSAGE_TYPES = new Set<string>(["text", "image", "video", "pdf"]);
-const MAX_CONTENT_LENGTH = 5000;
 const MAX_CLIENT_ID_LENGTH = 100;
 
 /**
@@ -28,6 +28,19 @@ function isValidId(id: unknown): id is string {
 
 function isValidClientId(id: unknown): id is string {
   return typeof id === "string" && id.length > 0 && id.length <= MAX_CLIENT_ID_LENGTH;
+}
+
+/**
+ * Socket equivalent of the HTTP error handler: an `ApiError` is a message the
+ * user should see, anything else is a bug we log and generalise.
+ */
+function emitError(socket: Socket, err: unknown, fallback: string) {
+  if (err instanceof ApiError) {
+    socket.emit("error", { message: err.message });
+    return;
+  }
+  console.error(`${fallback}:`, err);
+  socket.emit("error", { message: fallback });
 }
 
 export function registerSocketHandlers(_io: SocketServer, socket: Socket) {
@@ -107,69 +120,23 @@ export function registerSocketHandlers(_io: SocketServer, socket: Socket) {
   });
 
   socket.on("send-message", async (payload: SendMessagePayload) => {
+    const { roomId, content, uploadId, clientId } = payload ?? {};
     try {
-      const { roomId, content, type, fileUrl, fileName, fileSize, mimeType, clientId } =
-        payload ?? {};
-
-      if (!isValidId(roomId)) {
-        socket.emit("error", { message: "Invalid roomId" });
-        return;
-      }
-      if (!MESSAGE_TYPES.has(type)) {
-        socket.emit("error", { message: "Invalid message type" });
-        return;
-      }
-      const text = typeof content === "string" ? content : "";
-      if (text.length > MAX_CONTENT_LENGTH) {
-        socket.emit("error", { message: "Message too long" });
-        return;
-      }
-      if (type === "text" && !text.trim()) {
-        socket.emit("error", { message: "Cannot send an empty message" });
-        return;
-      }
-      if (type !== "text" && !fileUrl) {
-        socket.emit("error", { message: "File message is missing its file" });
-        return;
-      }
-
-      // Authorizes and gives us the member list in one round trip.
-      const room = await Room.findOne({ _id: roomId, members: user._id })
-        .select("members")
-        .lean();
-      if (!room) {
-        socket.emit("error", { message: "Not a room member" });
-        return;
-      }
-
-      // Members with a live socket receive this now, so it ships as delivered.
-      const deliveredTo = room.members.filter(
-        (m) => m.toString() === user._id || onlineCounts.has(m.toString())
-      );
-
-      const message = await Message.create({
+      const message = await createRoomMessage({
         roomId,
         senderId: user._id,
-        content: text,
-        type,
-        fileUrl,
-        fileName,
-        fileSize,
-        mimeType,
-        deliveredTo,
-        readBy: [user._id],
+        content,
+        uploadId,
+        isOnline: (userId) => onlineCounts.has(userId),
       });
-
-      const populated = await message.populate("senderId", "name email avatarUrl");
-      const saved = populated.toObject();
+      const saved = message.toObject();
 
       // Everyone else gets the plain message; the sender gets its clientId echoed
       // back so it can reconcile its optimistic bubble instead of appending a copy.
       socket.to(roomId).emit("receive-message", saved);
       socket.emit("receive-message", isValidClientId(clientId) ? { ...saved, clientId } : saved);
     } catch (err) {
-      console.error("send-message error:", err);
-      socket.emit("error", { message: "Failed to send message" });
+      emitError(socket, err, "Failed to send message");
     }
   });
 

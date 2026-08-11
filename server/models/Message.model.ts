@@ -2,6 +2,9 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 
 export type MessageType = "text" | "image" | "video" | "pdf";
 
+/** The subset a file can produce — an upload never yields a text message. */
+export type AttachmentType = Exclude<MessageType, "text">;
+
 export interface IMessage extends Document {
   roomId: Types.ObjectId;
   senderId: Types.ObjectId;

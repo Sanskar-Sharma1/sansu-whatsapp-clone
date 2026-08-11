@@ -1,13 +1,11 @@
-import { MessageType } from "../models/Message.model";
-
+/**
+ * Everything the client may say about a message. Type and file metadata are
+ * absent by design — the server derives them from the claimed upload.
+ */
 export interface SendMessagePayload {
   roomId: string;
-  content: string;
-  type: MessageType;
-  fileUrl?: string;
-  fileName?: string;
-  fileSize?: number;
-  mimeType?: string;
+  content?: string;
+  uploadId?: string;
   clientId?: string;
 }
 

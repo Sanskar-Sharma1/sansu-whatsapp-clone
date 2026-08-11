@@ -42,7 +42,8 @@ Wires `helmet`, CORS (credentials), `express.json`, `cookie-parser`, `morgan`, r
 **Models** (`server/models/`)
 - `User.model.ts` — name, email, **passwordHash (`select:false`)**, avatarUrl, provider (local|google), googleId, isOnline, lastSeen. Pre-save bcrypt hook; `comparePassword(plain)`. Also exports `PUBLIC_USER_FIELDS` (projection string) and `toPublicUser(doc)` → `IUserPublic` (the one public-shape mapper, reused everywhere).
 - `Room.model.ts` — name?, type (dm|group), members[] (indexed), createdBy, **dmKey** (unique partial index). `Room.findOrCreateDM` uses an atomic upsert on `dmKey` (no duplicate DMs, no self-DM).
-- `Message.model.ts` — roomId, senderId, content, type (text|image|video|pdf), file fields, **deliveredTo[]**, readBy[]. Compound index `{ roomId, createdAt }`. Both receipt arrays include the sender, so "delivered/read" means *some id other than `senderId`* — that's what drives the one-tick → two-tick → blue-tick progression.
+- `Message.model.ts` — roomId, senderId, content, type (text|image|video|pdf), file fields, **deliveredTo[]**, readBy[]. Compound index `{ roomId, createdAt }`. Both receipt arrays include the sender, so "delivered/read" means *some id other than `senderId`* — that's what drives the one-tick → two-tick → blue-tick progression. Also exports `AttachmentType` (`MessageType` minus `"text"`).
+- `Upload.model.ts` — ownerId, publicId, resourceType, fileUrl, fileName, fileSize, mimeType, messageType, **consumedAt**. One row per server-performed Cloudinary upload; single-use, claimed atomically. Index `{ consumedAt, createdAt }` for sweeping abandoned uploads.
 
 **Types** (`server/types/`) — `express.d.ts` (`Request.user?: IUserPublic`), `file.types.ts`, `socket.types.ts`.
 
@@ -53,7 +54,8 @@ Wires `helmet`, CORS (credentials), `express.json`, `cookie-parser`, `morgan`, r
 
 **Services** (`server/services/`)
 - `auth.service.ts` — `registerUser`, `loginUser` (opts into `+passwordHash`), `generateToken`, `verifyToken`, `verifyGoogleToken` (requires `email_verified`), `findOrCreateGoogleUser` (auto-links only when the existing account is already `provider:"google"`, else 409). Throws `ApiError` for auth failures so infra errors aren't masked as 401.
-- `file.service.ts` — `uploadToCloudinary(file)`; resolves type from `ALLOWED_UPLOADS`, uploads via `upload_stream` with `unique_filename`.
+- `file.service.ts` — `createUpload(file, ownerId)` resolves the type from `ALLOWED_UPLOADS`, uploads via `upload_stream` with `unique_filename`, and records an `Upload`. `claimUpload(uploadId, ownerId)` atomically marks it consumed — the filter carries both the ownership check and the single-use guarantee, so a foreign, spent, or unknown id all fail identically.
+- `message.service.ts` — `createRoomMessage({ roomId, senderId, content, uploadId, isOnline })`, the single place a message is written. Authorizes the room, claims the upload, derives `type` and every file field from the `Upload` record, and stamps `deliveredTo` for members with a live socket (presence is injected via `isOnline`, keeping socket state out of the service).
 
 **Middleware** (`server/middleware/`)
 - `auth.middleware.ts` — `requireAuth`: JWT from `Authorization: Bearer` OR `authToken` cookie → `req.user` via `toPublicUser`.
@@ -64,12 +66,12 @@ Wires `helmet`, CORS (credentials), `express.json`, `cookie-parser`, `morgan`, r
 - `auth/` → `/api/auth/register|login|google` (rate-limited), `/me`, `/logout`. Cookie `secure: env.isProduction`.
 - `users/` → `GET /api/users`, `GET /api/users/:id` (protected, id validated).
 - `rooms/` → `POST /dm`, `POST /group`, `GET /`, `GET /:roomId/messages`. **`getRoomMessages` enforces `isRoomMember` (no IDOR).**
-- `files/` → `POST /api/files/upload` (protected, multer here).
+- `files/` → `POST /api/files/uploadFile` (protected, multer here). Responds `201 { uploadId }` — a handle only, never the file metadata.
 
 **Socket.io** (`server/socket/`)
 - `socket.server.ts` — `initSocketServer(httpServer)`, `getIO()`.
 - `socket.middleware.ts` — reads JWT from the `authToken` **cookie** (falls back to `handshake.auth.token`).
-- `socket.handlers.ts` — every handler validates ObjectIds + enforces `isRoomMember`; `send-message` caps content length and echoes the client's `clientId` **back to the sender only** (so its optimistic bubble reconciles instead of duplicating); presence uses a per-user connection count (multi-tab safe); `mark-room-read` is scoped by `roomId`. Delivery is stamped in two places: `send-message` marks members with a live socket (`onlineCounts`), and `handleConnect` flushes the backlog for a user who just came online.
+- `socket.handlers.ts` — thin, like an HTTP controller: it validates the socket-only bits and delegates to services, with `emitError` mapping a thrown `ApiError` to `error` and anything else to a logged generic. Every handler validates ObjectIds + enforces `isRoomMember`; `send-message` delegates to `createRoomMessage` and echoes the client's `clientId` **back to the sender only** (so its optimistic bubble reconciles instead of duplicating); presence uses a per-user connection count (multi-tab safe); `mark-room-read` is scoped by `roomId`. Delivery is stamped in two places: `send-message` marks members with a live socket (`onlineCounts`), and `handleConnect` flushes the backlog for a user who just came online.
 
 ## Frontend Architecture
 
@@ -84,7 +86,7 @@ Order: `GoogleOAuthProvider` → `AuthProvider` → `SocketProvider` → `Presen
 - `withCredentials: true` — auth is the httpOnly cookie; **no token in JS**.
 - On a 401 to a non-`/api/auth/*` route, calls the handler registered via `setUnauthorizedHandler` (AuthProvider clears the user → ProtectedRoute redirects). No hard `window.location` redirect.
 
-**Types** (`web/src/types/index.ts`) — IUser, IRoom, IMessage (+ client-only `clientId`/`pending`), IUploadedFile, socket payloads.
+**Types** (`web/src/types/index.ts`) — IUser, IRoom, IMessage (+ client-only `clientId`/`pending`), IUploadResponse, socket payloads.
 
 **Utils** (`web/src/utils/`) — `format.ts` (`formatBytes`, `formatTime`), `room.ts` (`getRoomMeta` — the one DM/group display selector), `apiError.ts` (`getApiErrorMessage`).
 
@@ -130,7 +132,7 @@ A global `:focus-visible` ring is defined once in `index.css`. Icons come from *
 | Direction | Event | Payload |
 |---|---|---|
 | client→server | `join-room` / `leave-room` | `{ roomId }` (membership-checked) |
-| client→server | `send-message` | `{ roomId, content, type, fileUrl?, fileName?, fileSize?, mimeType?, clientId? }` |
+| client→server | `send-message` | `{ roomId, content?, uploadId?, clientId? }` — **no type, no file fields** |
 | client→server | `typing` / `stop-typing` | `{ roomId }` |
 | client→server | `mark-room-read` | `{ roomId }` (on room open + on each new message) |
 | server→client | `receive-message` | populated `IMessage` (+ `clientId`, echoed to the sender only) |
