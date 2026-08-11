@@ -35,7 +35,9 @@ export async function getRoomMessages(roomId: string, limit = 50) {
     .limit(limit)
     .populate("senderId", "name email avatarUrl")
     .lean();
-  return messages;
+  // .lean() skips schema defaults, so messages written before `deliveredTo`
+  // existed would arrive without it. Clients treat receipts as always-present.
+  return messages.map((m) => ({ ...m, deliveredTo: m.deliveredTo ?? [] }));
 }
 
 export async function isRoomMember(

@@ -8,6 +8,7 @@ export interface SendMessagePayload {
   fileName?: string;
   fileSize?: number;
   mimeType?: string;
+  clientId?: string;
 }
 
 export interface JoinRoomPayload {
@@ -18,7 +19,6 @@ export interface TypingPayload {
   roomId: string;
 }
 
-export interface MarkReadPayload {
+export interface MarkRoomReadPayload {
   roomId: string;
-  messageId: string;
 }

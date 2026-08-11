@@ -42,7 +42,7 @@ Wires `helmet`, CORS (credentials), `express.json`, `cookie-parser`, `morgan`, r
 **Models** (`server/models/`)
 - `User.model.ts` — name, email, **passwordHash (`select:false`)**, avatarUrl, provider (local|google), googleId, isOnline, lastSeen. Pre-save bcrypt hook; `comparePassword(plain)`. Also exports `PUBLIC_USER_FIELDS` (projection string) and `toPublicUser(doc)` → `IUserPublic` (the one public-shape mapper, reused everywhere).
 - `Room.model.ts` — name?, type (dm|group), members[] (indexed), createdBy, **dmKey** (unique partial index). `Room.findOrCreateDM` uses an atomic upsert on `dmKey` (no duplicate DMs, no self-DM).
-- `Message.model.ts` — roomId, senderId, content, type (text|image|video|pdf), file fields, readBy[]. Compound index `{ roomId, createdAt }`.
+- `Message.model.ts` — roomId, senderId, content, type (text|image|video|pdf), file fields, **deliveredTo[]**, readBy[]. Compound index `{ roomId, createdAt }`. Both receipt arrays include the sender, so "delivered/read" means *some id other than `senderId`* — that's what drives the one-tick → two-tick → blue-tick progression.
 
 **Types** (`server/types/`) — `express.d.ts` (`Request.user?: IUserPublic`), `file.types.ts`, `socket.types.ts`.
 
@@ -69,7 +69,7 @@ Wires `helmet`, CORS (credentials), `express.json`, `cookie-parser`, `morgan`, r
 **Socket.io** (`server/socket/`)
 - `socket.server.ts` — `initSocketServer(httpServer)`, `getIO()`.
 - `socket.middleware.ts` — reads JWT from the `authToken` **cookie** (falls back to `handshake.auth.token`).
-- `socket.handlers.ts` — every handler validates ObjectIds + enforces `isRoomMember`; `send-message` caps content length and echoes back the client's `clientId`; presence uses a per-user connection count (multi-tab safe); `mark-read` is scoped by `{ _id, roomId }`.
+- `socket.handlers.ts` — every handler validates ObjectIds + enforces `isRoomMember`; `send-message` caps content length and echoes the client's `clientId` **back to the sender only** (so its optimistic bubble reconciles instead of duplicating); presence uses a per-user connection count (multi-tab safe); `mark-room-read` is scoped by `roomId`. Delivery is stamped in two places: `send-message` marks members with a live socket (`onlineCounts`), and `handleConnect` flushes the backlog for a user who just came online.
 
 ## Frontend Architecture
 
@@ -101,7 +101,7 @@ Order: `GoogleOAuthProvider` → `AuthProvider` → `SocketProvider` → `Presen
 **Hooks** (`web/src/hooks/`)
 - `useAuth`, `useSocket`, `usePresence` — context accessors.
 - `useUsers`, `useRooms` — data + `{ isLoading, error }`.
-- `useRoomMessages(room)` — history load (loading/error), receive (deduped + optimistic reconciliation by `clientId`), read receipts, `sendText`/`sendFile`, `sendError`.
+- `useRoomMessages(room)` — history load (loading/error), receive (deduped + optimistic reconciliation by `clientId`), delivered/read receipts (batched, room-scoped), `sendText`/`sendFile`, `sendError`.
 - `useTyping(room)` — `typingNames` + debounced `notifyTyping`/`notifyStopTyping`.
 
 **Shared components** (`web/src/components/shared/`) — `Avatar`, `OnlineIndicator`, `FilePreviewBar`, `Spinner`, `Button`, `IconButton` (required `label`), `EmptyState`, `ListRow`, `Modal` (accessible dialog: focus trap, Escape, backdrop), `PanelHeader` (shared `h-16` header).
@@ -132,11 +132,11 @@ A global `:focus-visible` ring is defined once in `index.css`. Icons come from *
 | client→server | `join-room` / `leave-room` | `{ roomId }` (membership-checked) |
 | client→server | `send-message` | `{ roomId, content, type, fileUrl?, fileName?, fileSize?, mimeType?, clientId? }` |
 | client→server | `typing` / `stop-typing` | `{ roomId }` |
-| client→server | `mark-read` | `{ roomId, messageId }` |
-| server→client | `receive-message` | populated `IMessage` (+ echoed `clientId`) |
+| client→server | `mark-room-read` | `{ roomId }` (on room open + on each new message) |
+| server→client | `receive-message` | populated `IMessage` (+ `clientId`, echoed to the sender only) |
 | server→client | `user-typing` / `user-stop-typing` | `{ userId, name?, roomId }` |
 | server→client | `user-online` / `user-offline` | `{ userId, lastSeen? }` (consumed by PresenceProvider) |
-| server→client | `message-read` | `{ messageId, userId }` |
+| server→client | `messages-delivered` / `messages-read` | `{ roomId, messageIds, userId }` (batched receipts) |
 | server→client | `error` | `{ message }` (surfaced near the composer) |
 
 ## Environment Variables

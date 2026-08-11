@@ -26,6 +26,9 @@
   --color-muted: #8696a0;
   --color-faint: #667781;
 
+  /* Receipts — only the read state gets colour; sent/delivered inherit the bubble */
+  --color-receipt-read: #53bdeb;
+
   /* Feedback */
   --color-danger: #f15c6d;
   --color-danger-surface: rgba(241, 92, 109, 0.1);
